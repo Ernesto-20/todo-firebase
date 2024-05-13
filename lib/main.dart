@@ -41,16 +41,14 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage>
     with SingleTickerProviderStateMixin {
-  late final ToDoService service;
   late final TabController tabController;
   late final Stream<List<ToDo>> streamController;
 
   @override
   void initState() {
     super.initState();
-    service = ToDoService();
     tabController = TabController(initialIndex: 0, length: 2, vsync: this);
-    streamController = service.fetch();
+    streamController = ToDoService.fetch();
   }
 
   @override
@@ -76,16 +74,14 @@ class _MyHomePageState extends State<MyHomePage>
           ),
           body: Container(
             decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.elliptical(60, 30))),
+              color: Colors.white,
+              // borderRadius:
+              //     BorderRadius.vertical(top: Radius.elliptical(60, 20))
+            ),
             child: StreamBuilder<List<ToDo>>(
               stream: streamController,
               builder:
                   (BuildContext context, AsyncSnapshot<List<ToDo>> snapshot) {
-                if (snapshot.hasError) {
-                  return _buildError();
-                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return _buildLoading();
                 }
@@ -93,116 +89,13 @@ class _MyHomePageState extends State<MyHomePage>
                   return _buildList(snapshot);
                 }
 
-                return const Placeholder();
+                return _buildError();
               },
             ),
           ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () {
-              TextEditingController descriptionController =
-                  TextEditingController();
-              showDialog(
-                  context: context,
-                  builder: (context) {
-                    return Dialog(
-                      child: Container(
-                        decoration: BoxDecoration(
-                            color: Colors.yellow.shade100,
-                            borderRadius: BorderRadius.circular(5)),
-                        height: 300,
-                        width: double.infinity,
-                        child: Column(
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(top: 20),
-                              child: Text(
-                                'New task',
-                                style: TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 20, horizontal: 10),
-                              child: TextField(
-                                controller: descriptionController,
-                                maxLines: 4, // Para permitir múltiples líneas
-                                keyboardType: TextInputType
-                                    .multiline, // Para activar el teclado de múltiples líneas
-                                decoration: const InputDecoration(
-                                  hintText:
-                                      'Write a new task description here...',
-                                  hintStyle: TextStyle(fontSize: 15),
-                                  border:
-                                      OutlineInputBorder(), // Para agregar un borde alrededor del área de texto
-                                ),
-                              ),
-                            ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                TextButton(
-                                    onPressed: () {},
-                                    child: const Text('Cancel')),
-                                TextButton(
-                                  onPressed: () async {
-                                    DateTime now = DateTime.now();
-                                    print('here 1');
-
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(SnackBar(
-                                            backgroundColor: Colors.black,
-                                            content: Container(
-                                              alignment: Alignment.center,
-                                              child: CircularProgressIndicator(
-                                                color: Colors.blue.shade900,
-                                              ),
-                                            )));
-
-                                    await service
-                                        .post(ToDo(
-                                            description:
-                                                descriptionController.text,
-                                            manager: 'unknow',
-                                            state: StateToDo.news,
-                                            time: '${now.hour}:${now.minute}',
-                                            date:
-                                                '${now.day}-${now.month}-${now.year}',
-                                            isComplete: false,
-                                            type: tabController.index == 0
-                                                ? TypeToDo.front
-                                                : TypeToDo.back))
-                                        .then((bool value) {
-                                      if (value) {
-                                        Navigator.pop(context);
-                                        SchedulerBinding.instance
-                                            .addPostFrameCallback((_) {
-                                          ScaffoldMessenger.of(context)
-                                              .clearSnackBars();
-                                        });
-                                      }
-                                    });
-                                  },
-                                  style: const ButtonStyle(
-                                      backgroundColor: MaterialStatePropertyAll(
-                                          Colors.white54)),
-                                  child: const Text('Save and close'),
-                                )
-                              ],
-                            )
-                          ],
-                        ),
-                      ),
-                    );
-                  });
-            },
-            backgroundColor: Colors.blue.shade900,
-            shape: const CircleBorder(),
-            child: const Icon(
-              Icons.add,
-              color: Colors.white,
-            ),
-          ), // This trailing comma makes auto-formatting nicer for build methods.
+          floatingActionButton: MyFloatingActionButton(
+              tabController:
+                  tabController), // This trailing comma makes auto-formatting nicer for build methods.
         ),
       ],
     );
@@ -231,21 +124,23 @@ class _MyHomePageState extends State<MyHomePage>
       ));
 
   Widget _buildList(AsyncSnapshot<List<ToDo>> snapshot) {
-    List<ToDo> news = snapshot.data!
-        .where((element) => element.state == StateToDo.news)
+    List<ToDo> dataBack = snapshot.data!
+        .where((ToDo element) => element.type == TypeToDo.back)
         .toList();
-    List<ToDo> processing = snapshot.data!
-        .where((element) => element.state == StateToDo.processing)
+    List<ToDo> dataFront = snapshot.data!
+        .where((ToDo element) => element.type == TypeToDo.front)
         .toList();
-    List<ToDo> finish = snapshot.data!
-        .where((element) => element.state == StateToDo.finished)
-        .toList();
+
+    // .where((element) => element.type == TypeToDo.back)
+    // .map((ToDo toDo) => ToDoItem(
+    //       toDo: toDo,
+    //     )),
 
     return Container(
       padding: const EdgeInsets.only(top: 20),
       child: Column(
         children: [
-          _buildTabs(),
+          MyTabBar(tabController: tabController),
           const SizedBox(
             height: 20,
           ),
@@ -253,80 +148,229 @@ class _MyHomePageState extends State<MyHomePage>
               child: TabBarView(
             controller: tabController,
             children: [
-              ListView(
-                children: [
-                  news.isNotEmpty ? _labelToDo(label: 'New') : const SizedBox(),
-                  ...news
-                      .where((element) => element.type == TypeToDo.front)
-                      .map((ToDo toDo) => ToDoItem(
-                            toDo: toDo,
-                          )),
-                  processing.isNotEmpty
-                      ? _labelToDo(label: 'Processing')
-                      : const SizedBox(),
-                  ...processing
-                      .where((element) => element.type == TypeToDo.front)
-                      .map((ToDo toDo) => ToDoItem(
-                            toDo: toDo,
-                          )),
-                  finish.isNotEmpty
-                      ? _labelToDo(label: 'Finished')
-                      : const SizedBox(),
-                ],
-              ),
-              ListView(
-                children: [
-                  news.isNotEmpty ? _labelToDo(label: 'New') : const SizedBox(),
-                  ...news
-                      .where((element) => element.type == TypeToDo.back)
-                      .map((ToDo toDo) => ToDoItem(
-                            toDo: toDo,
-                          )),
-                  processing.isNotEmpty
-                      ? _labelToDo(label: 'Processing')
-                      : const SizedBox(),
-                  ...processing
-                      .where((element) => element.type == TypeToDo.back)
-                      .map((ToDo toDo) => ToDoItem(
-                            toDo: toDo,
-                          )),
-                  finish.isNotEmpty
-                      ? _labelToDo(label: 'Finished')
-                      : const SizedBox(),
-                ],
-              ),
+              ListView.separated(
+                  itemBuilder: (_, index) => ToDoItem(
+                        key: ValueKey(dataFront[index]),
+                        toDo: dataFront[index],
+                      ),
+                  separatorBuilder: (_, index) => const Divider(),
+                  itemCount: dataFront.length),
+              ListView.separated(
+                  itemBuilder: (_, index) => ToDoItem(
+                        key: ValueKey(dataBack[index]),
+                        toDo: dataBack[index],
+                      ),
+                  separatorBuilder: (_, index) => const Divider(),
+                  itemCount: dataBack.length),
             ],
           ))
         ],
       ),
     );
   }
+}
 
-  Container _labelToDo({required String label}) {
-    return Container(
-        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 20),
-        child: Text('State: $label'));
+class MyTabBar extends StatefulWidget {
+  const MyTabBar({
+    super.key,
+    required this.tabController,
+  });
+
+  final TabController tabController;
+
+  @override
+  State<MyTabBar> createState() => _MyTabBarState();
+}
+
+class _MyTabBarState extends State<MyTabBar>
+    with SingleTickerProviderStateMixin {
+  int currentIndex = 0;
+  late AnimationController animationController;
+  late Animation<Color?> animationFontEndTab;
+  late Animation<Color?> animationBackEndTab;
+  @override
+  void initState() {
+    super.initState();
+
+    animationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500))
+      ..addListener(() {
+        setState(() {});
+      });
+    animationFontEndTab =
+        ColorTween(begin: Colors.blue.shade900, end: Colors.white)
+            .animate(animationController);
+    animationBackEndTab =
+        ColorTween(begin: Colors.white, end: Colors.blue.shade900)
+            .animate(animationController);
   }
 
-  TabBar _buildTabs() {
+  @override
+  void dispose() {
+    animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return TabBar(
-      controller: tabController,
-      labelColor: Colors.black,
-      indicatorColor: Colors.black,
+      controller: widget.tabController,
+      labelColor: Colors.blue.shade900,
+      indicatorColor: Colors.blue.shade900,
       labelStyle: const TextStyle(fontSize: 18),
-      tabs: const [
-        Tab(
-          text: 'Frontend',
+      onTap: (int index) {
+        currentIndex = index;
+        if (currentIndex == 1) {
+          animationController.forward();
+        } else {
+          animationController.reverse();
+        }
+      },
+      tabs: [
+        Container(
+          color: animationFontEndTab.value,
+          width: double.infinity,
+          height: 40,
+          alignment: Alignment.center,
+          child: Text(
+            'Frontend',
+            style: TextStyle(color: animationBackEndTab.value),
+          ),
         ),
-        Tab(
-          text: 'Backend',
+        Container(
+          color: animationBackEndTab.value,
+          width: double.infinity,
+          height: 40,
+          alignment: Alignment.center,
+          child: Text(
+            'Backend',
+            style: TextStyle(color: animationFontEndTab.value),
+          ),
         ),
       ],
     );
   }
 }
 
-class ToDoItem extends StatelessWidget {
+class MyFloatingActionButton extends StatelessWidget {
+  const MyFloatingActionButton({
+    super.key,
+    required this.tabController,
+  });
+
+  final TabController tabController;
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton(
+      onPressed: () {
+        TextEditingController descriptionController = TextEditingController();
+        showDialog(
+            context: context,
+            builder: (context) {
+              return Dialog(
+                child: Container(
+                  decoration: BoxDecoration(
+                      color: Colors.yellow.shade100,
+                      borderRadius: BorderRadius.circular(5)),
+                  height: 300,
+                  width: double.infinity,
+                  child: Column(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 20),
+                        child: Text(
+                          'New task',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 20, horizontal: 10),
+                        child: TextField(
+                          controller: descriptionController,
+                          maxLines: 4, // Para permitir múltiples líneas
+                          keyboardType: TextInputType
+                              .multiline, // Para activar el teclado de múltiples líneas
+                          decoration: const InputDecoration(
+                            hintText: 'Write a new task description here...',
+                            hintStyle: TextStyle(fontSize: 15),
+                            border:
+                                OutlineInputBorder(), // Para agregar un borde alrededor del área de texto
+                          ),
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Cancel')),
+                          TextButton(
+                            onPressed: () async {
+                              DateTime now = DateTime.now();
+
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(SnackBar(
+                                      backgroundColor: Colors.black,
+                                      content: Container(
+                                        alignment: Alignment.center,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.blue.shade900,
+                                        ),
+                                      )));
+
+                              await ToDoService.post(ToDo(
+                                      id: '',
+                                      description: descriptionController.text,
+                                      manager: 'unknow',
+                                      state: StateToDo.created,
+                                      time: '${now.hour}:${now.minute}',
+                                      date:
+                                          '${now.day}-${now.month}-${now.year}',
+                                      isComplete: false,
+                                      type: tabController.index == 0
+                                          ? TypeToDo.front
+                                          : TypeToDo.back))
+                                  .then((bool value) {
+                                if (value) {
+                                  Navigator.pop(context);
+                                  SchedulerBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    ScaffoldMessenger.of(context)
+                                        .clearSnackBars();
+                                  });
+                                }
+                              });
+                            },
+                            style: const ButtonStyle(
+                                backgroundColor:
+                                    MaterialStatePropertyAll(Colors.white54)),
+                            child: const Text('Save and close'),
+                          )
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+              );
+            });
+      },
+      backgroundColor: Colors.blue.shade900,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: const Icon(
+        Icons.note_add_rounded,
+        color: Colors.white,
+        size: 30,
+      ),
+    );
+  }
+}
+
+class ToDoItem extends StatefulWidget {
   const ToDoItem({
     super.key,
     required this.toDo,
@@ -335,24 +379,171 @@ class ToDoItem extends StatelessWidget {
   final ToDo toDo;
 
   @override
+  State<ToDoItem> createState() => _ToDoItemState();
+}
+
+class _ToDoItemState extends State<ToDoItem> {
+  bool select = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPress: () {
+        setState(() {
+          select = !select;
+        });
+      },
+      child: Stack(
+        children: [
+          SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: Column(
+              children: [
+                Expanded(child: NoteItem(toDo: widget.toDo)),
+                _buildChangedState(context)
+              ],
+            ),
+          ),
+          if (select)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                color: const Color.fromARGB(220, 0, 0, 0),
+                alignment: Alignment.center,
+                child: IconButton(
+                  onPressed: () {
+                    ToDoService.delete(widget.toDo);
+                  },
+                  icon: Icon(
+                    Icons.delete_forever_rounded,
+                    color: Colors.red.shade900,
+                    size: 40,
+                  ),
+                ),
+              ),
+            )
+          else
+            const SizedBox(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChangedState(BuildContext context) {
+    return Container(
+        width: double.infinity,
+        height: 40,
+        padding: const EdgeInsets.only(top: 2, bottom: 2, right: 10, left: 10),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+                child: _buildAction(
+                    state: StateToDo.created,
+                    toDo: widget.toDo,
+                    isSelected: widget.toDo.state == StateToDo.created)),
+            Expanded(
+                child: _buildAction(
+                    state: StateToDo.processing,
+                    toDo: widget.toDo,
+                    isSelected: widget.toDo.state == StateToDo.processing)),
+            Expanded(
+                child: _buildAction(
+                    state: StateToDo.finished,
+                    toDo: widget.toDo,
+                    isSelected: widget.toDo.state == StateToDo.finished)),
+          ],
+        ));
+  }
+
+  Widget _buildAction(
+      {required StateToDo state,
+      required bool isSelected,
+      required ToDo toDo}) {
+    return InkWell(
+      onTap: () {
+        // print("Selected: $state");
+        ToDoService.update(toDo.copyWith(state: state));
+      },
+      child: Container(
+        height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(5),
+          color: isSelected ? Colors.blue.shade900 : Colors.transparent,
+        ),
+        child: Text(
+          state.toString().split('.').last,
+          style: isSelected
+              ? const TextStyle(color: Colors.white, fontSize: 16)
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+class NoteItem extends StatelessWidget {
+  const NoteItem({super.key, required this.toDo});
+
+  final ToDo toDo;
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.blue.shade100,
-      child: ListTile(
-        onTap: () {},
-        title: Text(toDo.description),
-        subtitle: Text(toDo.manager),
-        minLeadingWidth: 10,
-        trailing: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 5, minHeight: 5),
-          child: Checkbox(
-            value: false,
-            visualDensity: VisualDensity.compact,
-            onChanged: (bool? value) {},
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+      child: Container(
+        decoration: BoxDecoration(
+            color: Colors.yellow.shade100,
+            borderRadius: BorderRadius.circular(5)),
+        child: ListTile(
+          style: ListTileStyle.list,
+          onTap: () {},
+          title: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      toDo.date,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    Text(
+                      toDo.time,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+                Expanded(
+                    child: SizedBox(
+                        width: double.infinity,
+                        height: double.infinity,
+                        child: Text(toDo.description)))
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Color? _getTagColor(StateToDo state) {
+    switch (state) {
+      case StateToDo.created:
+        return Colors.yellow.shade600;
+      case StateToDo.processing:
+        return Colors.green.shade600;
+      case StateToDo.finished:
+        return Colors.blue.shade600;
+    }
   }
 }
 
